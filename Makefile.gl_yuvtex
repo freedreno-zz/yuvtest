@@ -1,0 +1,47 @@
+# Build Mode:
+#  bionic -  build for gnu/linux style filesystem, linking
+#            against android libc and libs in /system/lib
+#  glibc  -  build for gnu/linux glibc, linking against
+#            normal gnu dynamic loader
+BUILD ?= bionic
+
+CFLAGS = -Iinclude -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES
+
+ifeq ($(strip $(BUILD)),bionic)
+# Note: setup symlinks in /system/lib to the vendor specific .so's in
+# /system/lib/egl because android's dynamic linker can't seem to cope
+# with multiple -rpath's..
+# Possibly we don't need to link directly against gpu specific libs
+# but I was getting eglCreateContext() failing otherwise.
+LFLAGS_3D = -lEGL_adreno200 -lGLESv1_CM_adreno200
+LDFLAGS_MISC = -lui -lgsl -llog -lcutils -lstdc++ -lgabi++ -lstlport -lm
+# ### hacks to get __cxa_end_cleanup: ###
+LDFLAGS_MISC += /system/lib/crtbegin_so.o -lWVphoneAPI
+# #######################################
+CFLAGS += -DBIONIC -DANDROID
+CC = gcc -L /system/lib -mfloat-abi=soft
+CPP = g++ -L /system/lib -mfloat-abi=soft
+LD = ld --entry=_start -nostdlib --dynamic-linker /system/bin/linker -rpath /system/lib -L /system/lib
+else ifeq ($(strip $(BUILD)),glibc)
+LFLAGS_3D = -lEGL -lGLESv2
+LDFLAGS_MISC = -lX11 -lm
+CC = gcc -L /usr/lib
+LD = gcc -L /usr/lib
+WRAP_C2D2 =
+else
+error "Invalid build type"
+endif
+
+LFLAGS = $(LFLAGS_3D) $(LDFLAGS_MISC) -ldl -lc
+
+TARGET = gl_yuvtex
+
+$(TARGET): $(TARGET).o EGLUtils.o
+	$(LD) $^ $(LFLAGS) -o $@
+
+%.o: %.cpp
+	$(CPP) -nostdinc++ -nostdinc -fPIC -g -c $(CFLAGS) $(LFLAGS) $< -o $@
+
+clean:
+	rm -f *.o $(TARGET)
+

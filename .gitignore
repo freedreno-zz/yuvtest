@@ -1,0 +1,5 @@
+gl_yuvtex
+gl2_yuvtex
+*.so
+*.o
+*.rd
